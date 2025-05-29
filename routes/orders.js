@@ -39,23 +39,34 @@ router.post("/", auth(), orderValidation, async (req, res) => {
       currency: "usd",
       payment_method: req.body.paymentMethodId,
       confirm: true,
-      error_on_requires_action: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never",
+      },
     });
 
-    // Création de la commande
-    const order = new Order({
-      user: user._id,
-      products: user.cart,
-      total,
-    });
+    // Vérification du statut du paiement
+    if (paymentIntent.status === "succeeded") {
+      // Création de la commande
+      const order = new Order({
+        user: user._id,
+        products: user.cart,
+        total,
+      });
 
-    await order.save();
+      await order.save();
 
-    // Vider le panier
-    user.cart = [];
-    await user.save();
+      // Vider le panier
+      user.cart = [];
+      await user.save();
 
-    res.status(201).json(order);
+      res.status(201).json({ order, paymentIntent });
+    } else {
+      res.status(400).json({
+        error: "Payment requires additional action",
+        paymentIntent,
+      });
+    }
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
